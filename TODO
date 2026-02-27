@@ -1,0 +1,22 @@
+Backend:
+  ✔ 抽象 publisher subscriber service_client service_server action_client action_server 方法 @done(2026-02-27)
+  ✔ 抽象 shutdown 方法和 spin 方法，屏蔽差异 @high @done(2026-02-27)
+  ✔ 抽象 init 方法，屏蔽差异 @high @done(2026-02-27)
+  ✔ ros1 backend 继承并单独实现 ros1 的实现 @done(2026-02-27)
+  ✔ ros2 backend 继承并单独实现 ros2 的实现 @done(2026-02-27)
+
+Wrapper:
+  note: wrapper目前提供创建和注入接口, 提供出来原生的接口就可以了
+  note: 后续在考虑topic service action自身的差异, 通过继承再实现或者猴子补丁的方式进行兼容
+  ✔ 创建方法 @done(2026-02-27)
+    ✔ 既要有 ROS1 的创建方法又要有 ROS2 的创建方法 @done(2026-02-27)
+  ✔ 装饰器，根据被装饰函数参数判断发布/订阅、客户端/服务器 @done(2026-02-27)
+    ✔ Topic @done(2026-02-27)
+    ✔ Service @done(2026-02-27)
+    ✔ Action @done(2026-02-27)
+  ✔ 装饰器支持设置 __ros_meta__ 属性并存储基础 ROS 信息，方便后期用 inspect 获取 @done(2026-02-27)
+  ✔ 添加一个prefix参数, 允许用户设置一个前缀, 这个前缀会被添加到所有的topic/service/action的名字前面, 方便用户区分不同模块的topic/service/action @done(2026-02-27)
+
+
+Project:
+  ☐ 依赖能否根据 ROS 版本自动安装不同的依赖包 @high

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[project]
+name = "ros-wrapper"
+dynamic = ["version"]
+description = "Lightweight ROS1/ROS2 Python wrapper with unified runtime and decorator injection APIs"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "jay" }
+]
+dependencies = []
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.version]
+source = "file"
+path = "ros_wrapper/__init__.py"
+
+[tool.pdm.scripts]
+check = "python -m compileall ros_wrapper examples"
