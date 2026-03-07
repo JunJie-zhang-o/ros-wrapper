@@ -7,7 +7,7 @@ name = "ros-wrapper"
 dynamic = ["version"]
 description = "Lightweight ROS1/ROS2 Python wrapper with unified runtime and decorator injection APIs"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 authors = [
   { name = "jay" }
 ]
