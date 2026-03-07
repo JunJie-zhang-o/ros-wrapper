@@ -25,6 +25,11 @@ pdm install
 pdm run check
 ```
 
+## CI / 发布
+- GitHub Actions 会在 push / pull request 到 `main` 时运行 `compileall` 与 `pytest`（Python 3.8/3.9/3.10/3.11/3.12）。
+- 每次流水线都会用 Python 3.12 构建 wheel 与 sdist，并在 Actions 界面上传可下载的构建产物。
+- 推送任意 tag（如 `v0.1.0`）会复用已上传的构建产物并使用仓库机密 `PYPI_API_TOKEN` 自动发布到 PyPI。
+
 ## 三类接口
 
 ### 1) 自定义统一接口
