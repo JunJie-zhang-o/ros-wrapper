@@ -115,5 +115,31 @@ client = wrapper.service_client("/calc", AddTwoInts) # 实际使用: /module_a/c
 ## 动态版本
 版本号定义在 `ros_wrapper/__init__.py` 的 `__version__`，`pdm` 通过 `tool.pdm.version.source = "file"` 动态读取。
 
-## ROS1/ROS2 自定义数据格式差异
-见文档：`docs/ros1_ros2_custom_types.md`。
+## 文档
+
+### API 设计讨论
+详细的 ROS1/ROS2 统一 API 设计讨论，包括设计原则、核心功能和使用建议：
+- [`docs/ros1_ros2_api_design.md`](docs/ros1_ros2_api_design.md) - 完整的 API 设计文档
+
+### 自定义数据格式差异
+ROS1 和 ROS2 在自定义 msg/srv/action 格式上的差异说明：
+- [`docs/ros1_ros2_custom_types.md`](docs/ros1_ros2_custom_types.md) - 数据格式迁移指南
+
+## 示例代码
+
+项目提供了完整的示例代码，演示如何使用统一 API：
+
+### 基础示例
+- [`examples/mode1_demo.py`](examples/mode1_demo.py) - 直接 API 使用示例
+- [`examples/mode2_decorator_demo.py`](examples/mode2_decorator_demo.py) - 装饰器模式示例
+
+### 统一 API 详细示例
+- [`examples/unified_topic_example.py`](examples/unified_topic_example.py) - Topic Publisher/Subscriber 完整示例
+- [`examples/unified_service_example.py`](examples/unified_service_example.py) - Service Client/Server 完整示例
+- [`examples/unified_action_example.py`](examples/unified_action_example.py) - Action Client/Server 完整示例
+
+每个示例都包含：
+1. 三种 API 风格的使用方法（自定义统一 API、ROS1 兼容 API、ROS2 兼容 API）
+2. 装饰器模式的使用
+3. 命名空间前缀的应用
+4. 跨版本兼容性演示
