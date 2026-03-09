@@ -2,9 +2,43 @@ from __future__ import annotations
 
 from typing import Any
 
-from ros_wrapper import ROSConfig, ROSVersion, ROSWrapper, get_ros_meta
+from ros_wrapper import (
+    ROSConfig,
+    ROSVersion,
+    ROSWrapper,
+    get_ros_meta,
+    Publisher,
+    Subscriber,
+    ServiceClient,
+    ServiceServer,
+    ActionClient,
+    ActionGoalHandle,
+    ActionServer,
+    ServerGoalHandle,
+)
 from ros_wrapper.backends.base import ROSBackend
+from ros_wrapper.clients import (
+    _wrap_action_execute_for_ros1,
+    _wrap_action_execute_for_ros2,
+    _wrap_service_handler_for_ros1,
+    _wrap_service_handler_for_ros2,
+)
 from ros_wrapper.exceptions import ROSDecoratorUsageError
+
+
+# ---------------------------------------------------------------------------
+# Fake backend — returns unified wrapper types (as the real backends do)
+# ---------------------------------------------------------------------------
+
+class FakeNative:
+    """Stand-in for a native ROS publisher / client / server object."""
+
+    def __init__(self, kind: str, name: str) -> None:
+        self.kind = kind
+        self.name = name
+
+    def publish(self, msg: Any) -> None:
+        pass
 
 
 class FakeBackend(ROSBackend):
@@ -15,8 +49,8 @@ class FakeBackend(ROSBackend):
         self.spin_calls = 0
         self.shutdown_calls = 0
 
-    def publisher(self, topic: str, msg_type: Any, **kwargs: Any) -> Any:
-        return ("publisher", topic, msg_type, kwargs)
+    def publisher(self, topic: str, msg_type: Any, **kwargs: Any) -> Publisher:
+        return Publisher(FakeNative("publisher", topic))
 
     def subscriber(
         self,
@@ -24,11 +58,11 @@ class FakeBackend(ROSBackend):
         msg_type: Any,
         callback: Any,
         **kwargs: Any,
-    ) -> Any:
-        return ("subscriber", topic, msg_type, callback, kwargs)
+    ) -> Subscriber:
+        return Subscriber(FakeNative("subscriber", topic))
 
-    def service_client(self, name: str, srv_type: Any, **kwargs: Any) -> Any:
-        return ("service_client", name, srv_type, kwargs)
+    def service_client(self, name: str, srv_type: Any, **kwargs: Any) -> ServiceClient:
+        return ServiceClient(FakeNative("service_client", name), version="ros2", node=None)
 
     def service_server(
         self,
@@ -36,11 +70,11 @@ class FakeBackend(ROSBackend):
         srv_type: Any,
         handler: Any,
         **kwargs: Any,
-    ) -> Any:
-        return ("service_server", name, srv_type, handler, kwargs)
+    ) -> ServiceServer:
+        return ServiceServer(FakeNative("service_server", name))
 
-    def action_client(self, name: str, action_type: Any, **kwargs: Any) -> Any:
-        return ("action_client", name, action_type, kwargs)
+    def action_client(self, name: str, action_type: Any, **kwargs: Any) -> ActionClient:
+        return ActionClient(FakeNative("action_client", name), version="ros2", node=None)
 
     def action_server(
         self,
@@ -48,8 +82,8 @@ class FakeBackend(ROSBackend):
         action_type: Any,
         execute_callback: Any,
         **kwargs: Any,
-    ) -> Any:
-        return ("action_server", name, action_type, execute_callback, kwargs)
+    ) -> ActionServer:
+        return ActionServer(FakeNative("action_server", name))
 
     def init(self) -> None:
         self.init_calls += 1
@@ -66,12 +100,19 @@ class Msg:
 
 
 class Srv:
-    pass
+    _response_class = object
+
+    class Response:
+        pass
 
 
 class Action:
     pass
 
+
+# ---------------------------------------------------------------------------
+# Config tests
+# ---------------------------------------------------------------------------
 
 def test_ros2_config_forces_auto_init_true() -> None:
     cfg = ROSConfig(version=ROSVersion.ROS2, auto_init=False)
@@ -83,46 +124,46 @@ def test_ros1_config_respects_auto_init_flag() -> None:
     assert cfg.auto_init is False
 
 
-def test_custom_api_methods_route_to_backend() -> None:
+# ---------------------------------------------------------------------------
+# Unified wrapper type tests — backends must return wrapper objects
+# ---------------------------------------------------------------------------
+
+def test_custom_api_returns_unified_wrapper_types() -> None:
     wrapper = ROSWrapper(ROSConfig(version=ROSVersion.ROS1, auto_init=False), backend=FakeBackend())
 
-    assert wrapper.publisher("/topic", Msg)[0] == "publisher"
-    assert wrapper.subscriber("/topic", Msg, callback=lambda _msg: None)[0] == "subscriber"
-    assert wrapper.service_client("/svc", Srv)[0] == "service_client"
-    assert wrapper.service_server("/svc", Srv)[0] == "service_server"
-    assert wrapper.action_client("/action", Action)[0] == "action_client"
-    assert wrapper.action_server("/action", Action)[0] == "action_server"
+    assert isinstance(wrapper.publisher("/topic", Msg), Publisher)
+    assert isinstance(wrapper.subscriber("/topic", Msg, callback=lambda _: None), Subscriber)
+    assert isinstance(wrapper.service_client("/svc", Srv), ServiceClient)
+    assert isinstance(wrapper.service_server("/svc", Srv), ServiceServer)
+    assert isinstance(wrapper.action_client("/action", Action), ActionClient)
+    assert isinstance(wrapper.action_server("/action", Action), ActionServer)
 
 
-def test_ros1_compat_api_methods_route_to_custom_api() -> None:
+def test_ros1_compat_api_returns_unified_wrapper_types() -> None:
     wrapper = ROSWrapper(ROSConfig(version=ROSVersion.ROS1, auto_init=False), backend=FakeBackend())
 
-    assert wrapper.Publisher("/topic", Msg)[0] == "publisher"
-    assert wrapper.Subscriber("/topic", Msg, callback=lambda _msg: None)[0] == "subscriber"
-    assert wrapper.ServiceProxy("/svc", Srv)[0] == "service_client"
-    assert wrapper.Service("/svc", Srv, lambda _req: None)[0] == "service_server"
-    assert wrapper.SimpleActionClient("/action", Action)[0] == "action_client"
-    assert wrapper.SimpleActionServer("/action", Action, execute_cb=lambda *_: None)[0] == "action_server"
+    assert isinstance(wrapper.Publisher("/topic", Msg), Publisher)
+    assert isinstance(wrapper.Subscriber("/topic", Msg, callback=lambda _: None), Subscriber)
+    assert isinstance(wrapper.ServiceProxy("/svc", Srv), ServiceClient)
+    assert isinstance(wrapper.Service("/svc", Srv, lambda _req, resp: resp), ServiceServer)
+    assert isinstance(wrapper.SimpleActionClient("/action", Action), ActionClient)
+    assert isinstance(wrapper.SimpleActionServer("/action", Action, execute_cb=lambda *_: None), ActionServer)
 
 
-def test_ros2_compat_api_methods_route_to_custom_api() -> None:
+def test_ros2_compat_api_returns_unified_wrapper_types() -> None:
     wrapper = ROSWrapper(ROSConfig(version=ROSVersion.ROS2, auto_init=False), backend=FakeBackend())
 
-    pub = wrapper.create_publisher(Msg, "/topic", qos_profile=5)
-    sub = wrapper.create_subscription(Msg, "/topic", callback=lambda _msg: None, qos_profile=7)
-    client = wrapper.create_client(Srv, "/svc")
-    server = wrapper.create_service(Srv, "/svc", callback=lambda _req, resp: resp)
-    act_client = wrapper.ActionClient(Action, "/action")
-    act_server = wrapper.ActionServer(Action, "/action", execute_callback=lambda *_: None)
+    assert isinstance(wrapper.create_publisher(Msg, "/topic", qos_profile=5), Publisher)
+    assert isinstance(wrapper.create_subscription(Msg, "/topic", callback=lambda _: None, qos_profile=7), Subscriber)
+    assert isinstance(wrapper.create_client(Srv, "/svc"), ServiceClient)
+    assert isinstance(wrapper.create_service(Srv, "/svc", callback=lambda _req, resp: resp), ServiceServer)
+    assert isinstance(wrapper.ActionClient(Action, "/action"), ActionClient)
+    assert isinstance(wrapper.ActionServer(Action, "/action", execute_callback=lambda *_: None), ActionServer)
 
-    assert pub == ("publisher", "/topic", Msg, {"qos_profile": 5})
-    assert sub[0] == "subscriber"
-    assert sub[4]["qos_profile"] == 7
-    assert client[0] == "service_client"
-    assert server[0] == "service_server"
-    assert act_client[0] == "action_client"
-    assert act_server[0] == "action_server"
 
+# ---------------------------------------------------------------------------
+# Prefix tests — the wrapped native object's .name should reflect prefix
+# ---------------------------------------------------------------------------
 
 def test_prefix_applies_to_custom_api_names() -> None:
     wrapper = ROSWrapper(
@@ -130,13 +171,14 @@ def test_prefix_applies_to_custom_api_names() -> None:
         backend=FakeBackend(),
     )
 
-    assert wrapper.publisher("/topic", Msg)[1] == "/module_a/topic"
-    assert wrapper.subscriber("/topic", Msg, callback=lambda _msg: None)[1] == "/module_a/topic"
-    assert wrapper.service_client("/svc", Srv)[1] == "/module_a/svc"
-    assert wrapper.service_server("/svc", Srv)[1] == "/module_a/svc"
-    assert wrapper.action_client("/action", Action)[1] == "/module_a/action"
-    assert wrapper.action_server("/action", Action)[1] == "/module_a/action"
-    assert wrapper.publisher("/module_a/topic", Msg)[1] == "/module_a/topic"
+    assert wrapper.publisher("/topic", Msg)._native.name == "/module_a/topic"
+    assert wrapper.subscriber("/topic", Msg, callback=lambda _: None)._native.name == "/module_a/topic"
+    assert wrapper.service_client("/svc", Srv)._native.name == "/module_a/svc"
+    assert wrapper.service_server("/svc", Srv)._native.name == "/module_a/svc"
+    assert wrapper.action_client("/action", Action)._native.name == "/module_a/action"
+    assert wrapper.action_server("/action", Action)._native.name == "/module_a/action"
+    # Already-prefixed path should not be doubled
+    assert wrapper.publisher("/module_a/topic", Msg)._native.name == "/module_a/topic"
 
 
 def test_prefix_applies_to_ros1_ros2_compat_names() -> None:
@@ -145,14 +187,18 @@ def test_prefix_applies_to_ros1_ros2_compat_names() -> None:
         backend=FakeBackend(),
     )
 
-    assert wrapper.Publisher("/topic", Msg)[1] == "/module_b/topic"
-    assert wrapper.ServiceProxy("/svc", Srv)[1] == "/module_b/svc"
-    assert wrapper.SimpleActionClient("/action", Action)[1] == "/module_b/action"
+    assert wrapper.Publisher("/topic", Msg)._native.name == "/module_b/topic"
+    assert wrapper.ServiceProxy("/svc", Srv)._native.name == "/module_b/svc"
+    assert wrapper.SimpleActionClient("/action", Action)._native.name == "/module_b/action"
 
-    assert wrapper.create_publisher(Msg, "/topic")[1] == "/module_b/topic"
-    assert wrapper.create_client(Srv, "/svc")[1] == "/module_b/svc"
-    assert wrapper.ActionClient(Action, "/action")[1] == "/module_b/action"
+    assert wrapper.create_publisher(Msg, "/topic")._native.name == "/module_b/topic"
+    assert wrapper.create_client(Srv, "/svc")._native.name == "/module_b/svc"
+    assert wrapper.ActionClient(Action, "/action")._native.name == "/module_b/action"
 
+
+# ---------------------------------------------------------------------------
+# Decorator tests
+# ---------------------------------------------------------------------------
 
 def test_topic_decorator_inferrs_publisher_role() -> None:
     wrapper = ROSWrapper(ROSConfig(version=ROSVersion.ROS2, auto_init=False), backend=FakeBackend())
@@ -162,7 +208,7 @@ def test_topic_decorator_inferrs_publisher_role() -> None:
         return publisher
 
     entity = fn()
-    assert entity[0] == "publisher"
+    assert isinstance(entity, Publisher)
     assert get_ros_meta(fn)[0].decorator == "Topic"
     assert get_ros_meta(fn)[0].role == "publisher"
 
@@ -175,7 +221,7 @@ def test_topic_decorator_inferrs_subscriber_role() -> None:
         return subscriber
 
     entity = fn()
-    assert entity[0] == "subscriber"
+    assert isinstance(entity, Subscriber)
     assert get_ros_meta(fn)[0].decorator == "Topic"
     assert get_ros_meta(fn)[0].role == "subscriber"
 
@@ -204,8 +250,8 @@ def test_service_and_action_roles_are_inferred_from_signature() -> None:
     def serve_action(*, server):
         return server
 
-    assert call_service()[0] == "service_client"
-    assert serve_action()[0] == "action_server"
+    assert isinstance(call_service(), ServiceClient)
+    assert isinstance(serve_action(), ActionServer)
     assert get_ros_meta(call_service)[0].role == "client"
     assert get_ros_meta(serve_action)[0].role == "server"
 
@@ -247,11 +293,17 @@ def test_prefix_applies_to_decorator_entity_and_meta() -> None:
     topic_meta = get_ros_meta(topic_fn)[0]
     service_meta = get_ros_meta(service_fn)[0]
 
-    assert topic_entity[1] == "/module_c/topic"
-    assert service_entity[1] == "/module_c/svc"
+    assert isinstance(topic_entity, Publisher)
+    assert isinstance(service_entity, ServiceClient)
+    assert topic_entity._native.name == "/module_c/topic"
+    assert service_entity._native.name == "/module_c/svc"
     assert topic_meta.resource == "/module_c/topic"
     assert service_meta.resource == "/module_c/svc"
 
+
+# ---------------------------------------------------------------------------
+# Lifecycle tests
+# ---------------------------------------------------------------------------
 
 def test_spin_and_shutdown_delegate_to_backend() -> None:
     backend = FakeBackend()
@@ -275,3 +327,110 @@ def test_init_delegates_to_backend() -> None:
 def test_string_version_is_normalized_to_enum() -> None:
     cfg = ROSConfig(version="ros2", auto_init=False)
     assert cfg.version is ROSVersion.ROS2
+
+
+# ---------------------------------------------------------------------------
+# clients.py unit tests — wrapper logic without real ROS
+# ---------------------------------------------------------------------------
+
+def test_service_handler_ros1_wrapping() -> None:
+    """_wrap_service_handler_for_ros1 should inject a response object."""
+
+    class FakeSrv:
+        class Response:
+            result = 0
+
+        _response_class = Response
+
+    responses = []
+
+    def unified_handler(request: Any, response: Any) -> Any:
+        response.result = request
+        responses.append(response)
+        return response
+
+    ros1_handler = _wrap_service_handler_for_ros1(FakeSrv, unified_handler)
+    returned = ros1_handler(42)
+    assert returned.result == 42
+    assert responses[0] is returned
+
+
+def test_service_handler_ros2_wrapping_is_passthrough() -> None:
+    sentinel = object()
+    assert _wrap_service_handler_for_ros2(sentinel) is sentinel
+
+
+def test_server_goal_handle_ros1_is_cancel_requested() -> None:
+    class FakeServer:
+        def __init__(self, preempt: bool) -> None:
+            self._preempt = preempt
+
+        def is_preempt_requested(self) -> bool:
+            return self._preempt
+
+    gh_yes = ServerGoalHandle("ros1", request=None, ros1_server=FakeServer(True))
+    gh_no = ServerGoalHandle("ros1", request=None, ros1_server=FakeServer(False))
+    assert gh_yes.is_cancel_requested is True
+    assert gh_no.is_cancel_requested is False
+
+
+def test_server_goal_handle_ros2_is_cancel_requested() -> None:
+    class FakeHandle:
+        def __init__(self, cancel: bool) -> None:
+            self.is_cancel_requested = cancel
+
+    gh_yes = ServerGoalHandle("ros2", request=None, ros2_goal_handle=FakeHandle(True))
+    gh_no = ServerGoalHandle("ros2", request=None, ros2_goal_handle=FakeHandle(False))
+    assert gh_yes.is_cancel_requested is True
+    assert gh_no.is_cancel_requested is False
+
+
+def test_action_execute_ros1_calls_set_succeeded() -> None:
+    """_wrap_action_execute_for_ros1 should call set_succeeded with the result."""
+
+    class FakeServer:
+        def __init__(self) -> None:
+            self.succeeded_result = None
+            self._preempt = False
+
+        def is_preempt_requested(self) -> bool:
+            return self._preempt
+
+        def set_succeeded(self, result: Any) -> None:
+            self.succeeded_result = result
+
+        def set_preempted(self) -> None:
+            pass
+
+    fake_server = FakeServer()
+    server_ref = [fake_server]
+
+    sentinel_result = object()
+
+    def execute(goal_handle: ServerGoalHandle) -> Any:
+        # goal_handle.request should be our goal_msg
+        assert goal_handle.request == "goal_msg"
+        return sentinel_result
+
+    wrapped = _wrap_action_execute_for_ros1(server_ref, execute)
+    wrapped("goal_msg")
+    assert fake_server.succeeded_result is sentinel_result
+
+
+def test_action_execute_ros2_wraps_goal_handle() -> None:
+    """_wrap_action_execute_for_ros2 should pass a ServerGoalHandle."""
+
+    received = []
+
+    def execute(goal_handle: ServerGoalHandle) -> str:
+        received.append(goal_handle)
+        return "done"
+
+    class FakeRos2GoalHandle:
+        request = "ros2_request"
+
+    wrapped = _wrap_action_execute_for_ros2(execute)
+    result = wrapped(FakeRos2GoalHandle())
+    assert result == "done"
+    assert isinstance(received[0], ServerGoalHandle)
+    assert received[0].request == "ros2_request"

@@ -61,3 +61,27 @@ Complete
 ## Notes
 - Update phase status as progress changes.
 - Keep docs explicit about ROS not installed vs installed behavior.
+
+## Session: 2026-03-10 ServiceClient Compatibility Update
+
+### Phase 1: Diff Review
+- [x] Inspect current `git diff` and locate unified client implementation
+- [x] Confirm missing `ServiceClient.call_async` cross-version API
+- **Status:** complete
+
+### Phase 2: Implementation
+- [x] Add `ServiceClient.call_async` for ROS1/ROS2
+- [x] Refactor `ServiceClient.call` to reuse `call_async`
+- [x] Keep timeout semantics explicit for ROS2 blocking waits
+- [x] Add `ActionClient.call` / `ActionClient.call_async` aliases for ROS1/ROS2 unified invocation
+- **Status:** complete
+
+### Phase 3: Type Hinting
+- [x] Add `ros_wrapper/clients.pyi` for IDE/static hint support
+- **Status:** complete
+
+### Phase 4: Verification
+- [x] Run compile check for package and tests
+- [x] Run executable self-check script for `call`/`call_async` behavior
+- [ ] Run `pytest` (blocked by missing dependency)
+- **Status:** complete

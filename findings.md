@@ -47,3 +47,20 @@
 - Wrapper now exposes three API groups in one facade: custom unified APIs, ROS1-compatible APIs, ROS2-compatible APIs.
 - Added `Topic` decorator for publisher/subscriber role inference from function signature.
 - Metadata write-path changed: only `__ros_meta__` is written; `get_ros_meta()` now reads from `__ros_meta__`.
+
+## 2026-03-10 ServiceClient Compatibility Findings
+- Current unified wrapper already normalized factory return types, but `ServiceClient` only exposed `call`, missing explicit `call_async`.
+- Added cross-version `call_async` contract:
+  - ROS2: direct passthrough to native `call_async`.
+  - ROS1: wraps sync native call in a background thread and returns `concurrent.futures.Future`.
+- Refactored `call` to always consume `call_async` path, so user code can rely on both entry points in ROS1/ROS2.
+- Added `ros_wrapper/clients.pyi` to expose wrapper class methods and callback contracts for IDE completion and static analysis.
+
+## 2026-03-10 Remaining Client Interface Completion
+- Added `ActionClient.call` / `ActionClient.call_async` unified aliases:
+  - `call` maps to synchronous `send_goal_and_wait`.
+  - `call_async` maps to asynchronous `send_goal` and returns `ActionGoalHandle`.
+- Added `ActionClient.send_goal_async` alias for ROS2-style naming while keeping ROS1 compatibility.
+- Improved ROS2 fallback behavior for environments without `rclpy` import:
+  - only import `rclpy` when a node is provided and spinning is required;
+  - use lightweight polling fallback for node-less test/mock scenarios.
