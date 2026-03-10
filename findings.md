@@ -47,3 +47,38 @@
 - Wrapper now exposes three API groups in one facade: custom unified APIs, ROS1-compatible APIs, ROS2-compatible APIs.
 - Added `Topic` decorator for publisher/subscriber role inference from function signature.
 - Metadata write-path changed: only `__ros_meta__` is written; `get_ros_meta()` now reads from `__ros_meta__`.
+
+## 2026-03-10 ServiceClient Compatibility Findings
+- Current unified wrapper already normalized factory return types, but `ServiceClient` only exposed `call`, missing explicit `call_async`.
+- Added cross-version `call_async` contract:
+  - ROS2: direct passthrough to native `call_async`.
+  - ROS1: wraps sync native call in a background thread and returns `concurrent.futures.Future`.
+- Refactored `call` to always consume `call_async` path, so user code can rely on both entry points in ROS1/ROS2.
+- Added `ros_wrapper/clients.pyi` to expose wrapper class methods and callback contracts for IDE completion and static analysis.
+
+## 2026-03-10 Remaining Client Interface Completion
+- Added `ActionClient.call` / `ActionClient.call_async` unified aliases:
+  - `call` maps to synchronous `send_goal_and_wait`.
+  - `call_async` maps to asynchronous `send_goal` and returns `ActionGoalHandle`.
+- Added `ActionClient.send_goal_async` alias for ROS2-style naming while keeping ROS1 compatibility.
+- Improved ROS2 fallback behavior for environments without `rclpy` import:
+  - only import `rclpy` when a node is provided and spinning is required;
+  - use lightweight polling fallback for node-less test/mock scenarios.
+
+## 2026-03-11 Repository Deep Review Findings
+- Architecture is generally clean: facade + backend adapter + unified clients wrapper has clear layering.
+- Confirmed two ROS1 runtime defects by direct local reproduction:
+  - Default ROS1 service handler signature mismatch: default handler is one-arg, but ROS1 wrapper adapter always invokes `(request, response)`.
+  - `ActionGoalHandle.get_result` ROS1 path depends on private attribute `_rospy` on native client; this is not part of SimpleActionClient public contract.
+- Test coverage gap:
+  - Existing tests rely on permissive mocks and do not exercise real-shape ROS1 client/server objects for the two paths above.
+
+## 2026-03-11 ROS1 Runtime Bugfix Decisions
+- `_wrap_service_handler_for_ros1` now supports both callback signatures:
+  - ROS1 style: `handler(request)`
+  - Unified style: `handler(request, response)`
+- Signature routing is done once via `inspect.signature`, avoiding broad `TypeError` swallow behavior.
+- `ActionGoalHandle.get_result` ROS1 timeout handling now uses public `rospy.Duration(timeout)` instead of private native attribute access.
+- Added regression tests:
+  - `test_ros1_handler_wrapping_supports_single_arg_handler`
+  - `test_goal_handle_get_result_timeout_uses_rospy_duration`

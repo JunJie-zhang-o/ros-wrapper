@@ -111,3 +111,65 @@
   - `python3 -m compileall ros_wrapper tests examples` passed.
   - `python3 -m pytest -q tests/test_wrapper.py` failed due to missing `pytest` module.
   - Inline execution of all `test_*` functions passed (`self-check passed`).
+
+## Session: 2026-03-10 (ServiceClient call/call_async + pyi)
+- **Status:** complete
+- Actions taken:
+  - Reviewed current working-tree diff to identify service client compatibility gap.
+  - Updated `ros_wrapper/clients.py`:
+    - Added `ServiceClient.call_async()` for both ROS versions.
+    - ROS2 path delegates to native `call_async`.
+    - ROS1 path executes sync call in a background thread and returns `Future`.
+    - Refactored `ServiceClient.call()` to unify on `call_async` and wait semantics.
+  - Added `ros_wrapper/clients.pyi` for IDE/static typing hints.
+  - Extended `tests/test_clients.py` with `ServiceClient.call_async` coverage and ROS1 wait-for-service mocking via `sys.modules`.
+- Verification:
+  - `python3 -m compileall ros_wrapper tests` passed.
+  - `python3 -m pytest -q tests/test_clients.py tests/test_wrapper.py` failed: `No module named pytest`.
+  - Inline self-check script for `ServiceClient.call` and `call_async` passed (`service-client-self-check passed`).
+
+## Session: 2026-03-10 (Remaining client interface completion)
+- **Status:** complete
+- Actions taken:
+  - Extended `ActionClient` unified API with:
+    - `call` alias (`send_goal_and_wait`)
+    - `call_async` alias (`send_goal`)
+    - `send_goal_async` alias (`send_goal`)
+  - Updated `ros_wrapper/clients.pyi` to include the new ActionClient aliases.
+  - Improved ROS2 node-less fallback paths in `ActionClient`/`ActionGoalHandle` to avoid unnecessary hard dependency on importing `rclpy`.
+  - Expanded `tests/test_clients.py` with ActionClient alias coverage for ROS1/ROS2.
+- Verification:
+  - `python3 -m compileall ros_wrapper tests` passed.
+  - Inline self-check scripts passed:
+    - `service-client-self-check passed`
+    - `action-client-alias-self-check passed`
+
+## Session: 2026-03-11 (Repository deep review)
+- **Status:** complete
+- Actions taken:
+  - Read all core modules in `ros_wrapper/`, all tests, CI workflow, and examples.
+  - Executed verification commands for current workspace state.
+  - Performed minimal runtime reproductions for suspicious ROS1 paths.
+- Verification:
+  - `python3 -m compileall ros_wrapper tests examples` passed.
+  - `python3 -m pytest -q` failed due to missing dependency: `No module named pytest`.
+  - Reproduction 1 (default ROS1 service handler path):
+    - Raised `TypeError`: default handler takes 1 positional argument but 2 were given.
+  - Reproduction 2 (`ActionGoalHandle.get_result` ROS1 timeout path):
+    - Raised `AttributeError`: native ROS1 client has no attribute `_rospy`.
+
+## Session: 2026-03-11 (ROS1 runtime bugfix)
+- **Status:** complete
+- Actions taken:
+  - Added failing regression tests first (TDD red):
+    - `tests/test_clients.py::TestServiceHandlerWrapping.test_ros1_handler_wrapping_supports_single_arg_handler`
+    - `tests/test_clients.py::TestActionClientROS1.test_goal_handle_get_result_timeout_uses_rospy_duration`
+  - Confirmed both tests fail before code change.
+  - Updated `ros_wrapper/clients.py`:
+    - `_wrap_service_handler_for_ros1` now adapts based on callback signature (1-arg / 2-arg).
+    - `ActionGoalHandle.get_result` ROS1 timeout path now imports `rospy.Duration` directly and no longer touches private `_rospy`.
+  - Re-ran targeted tests and confirmed pass.
+- Verification:
+  - `python3 -m compileall ros_wrapper tests examples` passed.
+  - Inline full test execution for `tests/test_clients.py` and `tests/test_wrapper.py` passed (`all-inline-tests-pass`).
+  - `python3 -m pytest -q` failed due to missing dependency: `No module named pytest`.

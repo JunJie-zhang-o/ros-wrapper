@@ -61,3 +61,64 @@ Complete
 ## Notes
 - Update phase status as progress changes.
 - Keep docs explicit about ROS not installed vs installed behavior.
+
+## Session: 2026-03-10 ServiceClient Compatibility Update
+
+### Phase 1: Diff Review
+- [x] Inspect current `git diff` and locate unified client implementation
+- [x] Confirm missing `ServiceClient.call_async` cross-version API
+- **Status:** complete
+
+### Phase 2: Implementation
+- [x] Add `ServiceClient.call_async` for ROS1/ROS2
+- [x] Refactor `ServiceClient.call` to reuse `call_async`
+- [x] Keep timeout semantics explicit for ROS2 blocking waits
+- [x] Add `ActionClient.call` / `ActionClient.call_async` aliases for ROS1/ROS2 unified invocation
+- **Status:** complete
+
+### Phase 3: Type Hinting
+- [x] Add `ros_wrapper/clients.pyi` for IDE/static hint support
+- **Status:** complete
+
+### Phase 4: Verification
+- [x] Run compile check for package and tests
+- [x] Run executable self-check script for `call`/`call_async` behavior
+- [ ] Run `pytest` (blocked by missing dependency)
+- **Status:** complete
+
+## Session: 2026-03-11 Repository Deep Review
+
+### Phase 1: Architecture & Surface Scan
+- [x] Read project structure and all core runtime modules
+- [x] Read tests/docs/examples to compare expected vs actual behavior
+- **Status:** complete
+
+### Phase 2: Runtime Verification
+- [x] Run `python3 -m compileall ros_wrapper tests examples`
+- [ ] Run `python3 -m pytest -q` (blocked by missing dependency)
+- [x] Reproduce suspicious runtime paths with minimal local scripts
+- **Status:** complete
+
+### Phase 3: Findings Consolidation
+- [x] Classify issues by severity and attach file/line evidence
+- [x] Evaluate implementation on rationality/simplicity/efficiency dimensions
+- **Status:** complete
+
+## Session: 2026-03-11 ROS1 Runtime Bugfix
+
+### Phase 1: TDD Red
+- [x] Add regression test for ROS1 single-arg service handler adapter path
+- [x] Add regression test for ROS1 ActionGoalHandle timeout duration path
+- [x] Execute new tests and confirm failure before production changes
+- **Status:** complete
+
+### Phase 2: Implementation
+- [x] Update ROS1 service handler adapter to support both 1-arg and 2-arg callbacks
+- [x] Remove private `_rospy` dependency in ROS1 ActionGoalHandle timeout handling
+- **Status:** complete
+
+### Phase 3: Verification
+- [x] Run `python3 -m compileall ros_wrapper tests examples`
+- [x] Run inline execution for full `tests/test_clients.py` + `tests/test_wrapper.py`
+- [ ] Run `python3 -m pytest -q` (blocked by missing dependency)
+- **Status:** complete
