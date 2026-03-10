@@ -206,6 +206,18 @@ class TestServiceHandlerWrapping:
         ros2_handler = _wrap_service_handler_for_ros2(handler)
         assert ros2_handler is handler
 
+    def test_ros1_handler_wrapping_supports_single_arg_handler(self) -> None:
+        """ROS1-style handler(request) should remain usable via the adapter."""
+
+        def ros1_style_handler(req: Any) -> Any:
+            return req.a + req.b
+
+        ros1_handler = _wrap_service_handler_for_ros1(FakeSrv, ros1_style_handler)
+        req = FakeSrv.Request()
+        req.a, req.b = 2, 5
+        result = ros1_handler(req)
+        assert result == 7
+
 
 # ---------------------------------------------------------------------------
 # ActionClient — ROS1
@@ -257,6 +269,21 @@ class TestActionClientROS1:
         native.get_result.return_value = expected_result
         native.wait_for_result.return_value = None
         result = client.call(goal)
+        assert result is expected_result
+
+    def test_goal_handle_get_result_timeout_uses_rospy_duration(self) -> None:
+        native = MagicMock()
+        expected_result = FakeResult()
+        native.get_result.return_value = expected_result
+        native.wait_for_result.return_value = None
+        handle = ActionGoalHandle(version="ros1", ros1_client=native)
+
+        rospy = MagicMock()
+        rospy.Duration.side_effect = lambda t: ("duration", t)
+        with patch.dict(sys.modules, {"rospy": rospy}):
+            result = handle.get_result(timeout=1.5)
+
+        native.wait_for_result.assert_called_once_with(timeout=("duration", 1.5))
         assert result is expected_result
 
 

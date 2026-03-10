@@ -143,3 +143,33 @@
   - Inline self-check scripts passed:
     - `service-client-self-check passed`
     - `action-client-alias-self-check passed`
+
+## Session: 2026-03-11 (Repository deep review)
+- **Status:** complete
+- Actions taken:
+  - Read all core modules in `ros_wrapper/`, all tests, CI workflow, and examples.
+  - Executed verification commands for current workspace state.
+  - Performed minimal runtime reproductions for suspicious ROS1 paths.
+- Verification:
+  - `python3 -m compileall ros_wrapper tests examples` passed.
+  - `python3 -m pytest -q` failed due to missing dependency: `No module named pytest`.
+  - Reproduction 1 (default ROS1 service handler path):
+    - Raised `TypeError`: default handler takes 1 positional argument but 2 were given.
+  - Reproduction 2 (`ActionGoalHandle.get_result` ROS1 timeout path):
+    - Raised `AttributeError`: native ROS1 client has no attribute `_rospy`.
+
+## Session: 2026-03-11 (ROS1 runtime bugfix)
+- **Status:** complete
+- Actions taken:
+  - Added failing regression tests first (TDD red):
+    - `tests/test_clients.py::TestServiceHandlerWrapping.test_ros1_handler_wrapping_supports_single_arg_handler`
+    - `tests/test_clients.py::TestActionClientROS1.test_goal_handle_get_result_timeout_uses_rospy_duration`
+  - Confirmed both tests fail before code change.
+  - Updated `ros_wrapper/clients.py`:
+    - `_wrap_service_handler_for_ros1` now adapts based on callback signature (1-arg / 2-arg).
+    - `ActionGoalHandle.get_result` ROS1 timeout path now imports `rospy.Duration` directly and no longer touches private `_rospy`.
+  - Re-ran targeted tests and confirmed pass.
+- Verification:
+  - `python3 -m compileall ros_wrapper tests examples` passed.
+  - Inline full test execution for `tests/test_clients.py` and `tests/test_wrapper.py` passed (`all-inline-tests-pass`).
+  - `python3 -m pytest -q` failed due to missing dependency: `No module named pytest`.

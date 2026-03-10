@@ -40,6 +40,7 @@ ActionServer
 """
 from __future__ import annotations
 
+import inspect
 from concurrent.futures import Future
 from threading import Thread
 from typing import Any, Callable, Optional
@@ -228,9 +229,32 @@ def _wrap_service_handler_for_ros1(srv_type: Any, handler: Callable) -> Callable
     Unified handler signature: ``handler(request, response) -> response``
     ROS1 handler signature:    ``handler(request) -> response``
     """
+    try:
+        parameters = tuple(inspect.signature(handler).parameters.values())
+    except (TypeError, ValueError):
+        parameters = ()
+
+    supports_varargs = any(
+        param.kind is inspect.Parameter.VAR_POSITIONAL
+        for param in parameters
+    )
+    positional_count = sum(
+        1
+        for param in parameters
+        if param.kind
+        in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+    )
+    expects_response = supports_varargs or positional_count >= 2
+
     def ros1_handler(request: Any) -> Any:
         response = srv_type._response_class()
-        return handler(request, response)
+        if expects_response:
+            return handler(request, response)
+        return handler(request)
+
     return ros1_handler
 
 
@@ -291,10 +315,15 @@ class ActionGoalHandle:
     def get_result(self, timeout: Optional[float] = None) -> Any:
         """Block and return the action result."""
         if self._version == "ros1":
-            self._ros1_client.wait_for_result(
-                timeout=None if timeout is None else
-                self._ros1_client._rospy.Duration(timeout)
-            )
+            ros_timeout = None
+            if timeout is not None:
+                try:
+                    import rospy
+                    ros_timeout = rospy.Duration(timeout)
+                except ModuleNotFoundError:
+                    # Keep mock-only environments usable without rospy installed.
+                    ros_timeout = timeout
+            self._ros1_client.wait_for_result(timeout=ros_timeout)
             return self._ros1_client.get_result()
         else:
             future = self._ros2_handle.get_result_async()

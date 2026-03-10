@@ -64,3 +64,21 @@
 - Improved ROS2 fallback behavior for environments without `rclpy` import:
   - only import `rclpy` when a node is provided and spinning is required;
   - use lightweight polling fallback for node-less test/mock scenarios.
+
+## 2026-03-11 Repository Deep Review Findings
+- Architecture is generally clean: facade + backend adapter + unified clients wrapper has clear layering.
+- Confirmed two ROS1 runtime defects by direct local reproduction:
+  - Default ROS1 service handler signature mismatch: default handler is one-arg, but ROS1 wrapper adapter always invokes `(request, response)`.
+  - `ActionGoalHandle.get_result` ROS1 path depends on private attribute `_rospy` on native client; this is not part of SimpleActionClient public contract.
+- Test coverage gap:
+  - Existing tests rely on permissive mocks and do not exercise real-shape ROS1 client/server objects for the two paths above.
+
+## 2026-03-11 ROS1 Runtime Bugfix Decisions
+- `_wrap_service_handler_for_ros1` now supports both callback signatures:
+  - ROS1 style: `handler(request)`
+  - Unified style: `handler(request, response)`
+- Signature routing is done once via `inspect.signature`, avoiding broad `TypeError` swallow behavior.
+- `ActionGoalHandle.get_result` ROS1 timeout handling now uses public `rospy.Duration(timeout)` instead of private native attribute access.
+- Added regression tests:
+  - `test_ros1_handler_wrapping_supports_single_arg_handler`
+  - `test_goal_handle_get_result_timeout_uses_rospy_duration`
